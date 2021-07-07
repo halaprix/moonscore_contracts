@@ -2,8 +2,6 @@
 
 pragma solidity ^0.8.0;
 
-
-
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -11,10 +9,21 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
 // import "./PIXELToken.sol";
 abstract contract PIXELToken is ERC20 {
     function mint(address _to, uint256 _amount) public virtual;
+}
+
+// For intereacting with NFTv1
+interface INftV1 is IERC721 {
+    function generateRARITYofTokenById(uint256 _tokenId)
+        external
+        view
+        returns (uint256);
 }
 
 // For interacting with our own strategy
@@ -53,6 +62,9 @@ contract PixelFarm is Ownable, ReentrancyGuard {
     struct UserInfo {
         uint256 shares; // How many LP tokens the user has provided.
         uint256 rewardDebt; // Reward debt. See explanation below.
+        uint256 boost; // Current boost level for the user
+        uint256 penalty; // Current penalty for the user
+        uint256 lastActionTimeStamp; // timestamp for penalty calculation
 
         // We do some fancy math here. Basically, any point in time, the amount of PIXEL
         // entitled to a user but is pending to be distributed is:
@@ -74,17 +86,17 @@ contract PixelFarm is Ownable, ReentrancyGuard {
         uint256 accPIXELPerShare; // Accumulated PIXEL per share, times 1e12. See below.
         address strat; // Strategy address that will auto compound want tokens
     }
-
+    // setup reward token and nft addresses
     address public PIXEL = 0xc56130a9b5C82D418b55a8d4Ff582738ec5CF7E3;
-   
+    INftV1 public _nftV1 = INftV1(0xdB553FA278e962a75105b84267B7cC42FE12a3e2);
 
     address public burnAddress = 0x000000000000000000000000000000000000dEaD;
-
+    // TODO : make it right
     uint256 public ownerPIXELReward = 100;
 
     uint256 public PIXELMaxSupply = 10000e18;
-    uint256 public PIXELPerBlock = 1e15; 
-    uint256 public startBlock = 8011841; 
+    uint256 public PIXELPerBlock = 1e15;
+    uint256 public startBlock = 8011841;
 
     PoolInfo[] public poolInfo; // Info of each pool.
     mapping(uint256 => mapping(address => UserInfo)) public userInfo; // Info of each user that stakes LP tokens.
@@ -114,8 +126,9 @@ contract PixelFarm is Ownable, ReentrancyGuard {
         if (_withUpdate) {
             massUpdatePools();
         }
-        uint256 lastRewardBlock =
-            block.number > startBlock ? block.number : startBlock;
+        uint256 lastRewardBlock = block.number > startBlock
+            ? block.number
+            : startBlock;
         totalAllocPoint = totalAllocPoint.add(_allocPoint);
         poolInfo.push(
             PoolInfo({
@@ -166,12 +179,14 @@ contract PixelFarm is Ownable, ReentrancyGuard {
         uint256 accPIXELPerShare = pool.accPIXELPerShare;
         uint256 sharesTotal = IStrategy(pool.strat).sharesTotal();
         if (block.number > pool.lastRewardBlock && sharesTotal != 0) {
-            uint256 multiplier =
-                getMultiplier(pool.lastRewardBlock, block.number);
-            uint256 PIXELReward =
-                multiplier.mul(PIXELPerBlock).mul(pool.allocPoint).div(
-                    totalAllocPoint
-                );
+            uint256 multiplier = getMultiplier(
+                pool.lastRewardBlock,
+                block.number
+            );
+            uint256 PIXELReward = multiplier
+            .mul(PIXELPerBlock)
+            .mul(pool.allocPoint)
+            .div(totalAllocPoint);
             accPIXELPerShare = accPIXELPerShare.add(
                 PIXELReward.mul(1e12).div(sharesTotal)
             );
@@ -189,8 +204,8 @@ contract PixelFarm is Ownable, ReentrancyGuard {
         UserInfo storage user = userInfo[_pid][_user];
 
         uint256 sharesTotal = IStrategy(pool.strat).sharesTotal();
-        uint256 wantLockedTotal =
-            IStrategy(poolInfo[_pid].strat).wantLockedTotal();
+        uint256 wantLockedTotal = IStrategy(poolInfo[_pid].strat)
+        .wantLockedTotal();
         if (sharesTotal == 0) {
             return 0;
         }
@@ -220,10 +235,10 @@ contract PixelFarm is Ownable, ReentrancyGuard {
         if (multiplier <= 0) {
             return;
         }
-        uint256 PIXELReward =
-            multiplier.mul(PIXELPerBlock).mul(pool.allocPoint).div(
-                totalAllocPoint
-            );
+        uint256 PIXELReward = multiplier
+        .mul(PIXELPerBlock)
+        .mul(pool.allocPoint)
+        .div(totalAllocPoint);
 
         PIXELToken(PIXEL).mint(
             owner(),
@@ -237,6 +252,10 @@ contract PixelFarm is Ownable, ReentrancyGuard {
         pool.lastRewardBlock = block.number;
     }
 
+    // stakeNftV1
+    function stakeNftV1(uint256 _tokenId, uint256 _pid) public nonReentrant {}
+    function stakeNftV2(uint256 _tokenId, uint256 _pid) public nonReentrant {}
+
     // Want tokens moved from user -> PIXELFarm (PIXEL allocation) -> Strat (compounding)
     function deposit(uint256 _pid, uint256 _wantAmt) public nonReentrant {
         updatePool(_pid);
@@ -244,10 +263,11 @@ contract PixelFarm is Ownable, ReentrancyGuard {
         UserInfo storage user = userInfo[_pid][msg.sender];
 
         if (user.shares > 0) {
-            uint256 pending =
-                user.shares.mul(pool.accPIXELPerShare).div(1e12).sub(
-                    user.rewardDebt
-                );
+            uint256 pending = user
+            .shares
+            .mul(pool.accPIXELPerShare)
+            .div(1e12)
+            .sub(user.rewardDebt);
             if (pending > 0) {
                 safePIXELTransfer(msg.sender, pending);
             }
@@ -260,8 +280,10 @@ contract PixelFarm is Ownable, ReentrancyGuard {
             );
 
             pool.want.safeIncreaseAllowance(pool.strat, _wantAmt);
-            uint256 sharesAdded =
-                IStrategy(poolInfo[_pid].strat).deposit(msg.sender, _wantAmt);
+            uint256 sharesAdded = IStrategy(poolInfo[_pid].strat).deposit(
+                msg.sender,
+                _wantAmt
+            );
             user.shares = user.shares.add(sharesAdded);
         }
         user.rewardDebt = user.shares.mul(pool.accPIXELPerShare).div(1e12);
@@ -275,18 +297,17 @@ contract PixelFarm is Ownable, ReentrancyGuard {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
 
-        uint256 wantLockedTotal =
-            IStrategy(poolInfo[_pid].strat).wantLockedTotal();
+        uint256 wantLockedTotal = IStrategy(poolInfo[_pid].strat)
+        .wantLockedTotal();
         uint256 sharesTotal = IStrategy(poolInfo[_pid].strat).sharesTotal();
 
         require(user.shares > 0, "user.shares is 0");
         require(sharesTotal > 0, "sharesTotal is 0");
 
         // Withdraw pending PIXEL
-        uint256 pending =
-            user.shares.mul(pool.accPIXELPerShare).div(1e12).sub(
-                user.rewardDebt
-            );
+        uint256 pending = user.shares.mul(pool.accPIXELPerShare).div(1e12).sub(
+            user.rewardDebt
+        );
         if (pending > 0) {
             safePIXELTransfer(msg.sender, pending);
         }
@@ -297,8 +318,10 @@ contract PixelFarm is Ownable, ReentrancyGuard {
             _wantAmt = amount;
         }
         if (_wantAmt > 0) {
-            uint256 sharesRemoved =
-                IStrategy(poolInfo[_pid].strat).withdraw(msg.sender, _wantAmt);
+            uint256 sharesRemoved = IStrategy(poolInfo[_pid].strat).withdraw(
+                msg.sender,
+                _wantAmt
+            );
 
             if (sharesRemoved > user.shares) {
                 user.shares = 0;
@@ -315,7 +338,8 @@ contract PixelFarm is Ownable, ReentrancyGuard {
         user.rewardDebt = user.shares.mul(pool.accPIXELPerShare).div(1e12);
         emit Withdraw(msg.sender, _pid, _wantAmt);
     }
-// nonreaentrant is added two times - remove it from withdrawAll
+
+    // nonreaentrant is added two times - remove it from withdrawAll
     function withdrawAll(uint256 _pid) public nonReentrant {
         withdraw(_pid, type(uint256).max);
     }
@@ -325,8 +349,8 @@ contract PixelFarm is Ownable, ReentrancyGuard {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
 
-        uint256 wantLockedTotal =
-            IStrategy(poolInfo[_pid].strat).wantLockedTotal();
+        uint256 wantLockedTotal = IStrategy(poolInfo[_pid].strat)
+        .wantLockedTotal();
         uint256 sharesTotal = IStrategy(poolInfo[_pid].strat).sharesTotal();
         uint256 amount = user.shares.mul(wantLockedTotal).div(sharesTotal);
 
@@ -355,6 +379,4 @@ contract PixelFarm is Ownable, ReentrancyGuard {
         require(_token != PIXEL, "!safe");
         IERC20(_token).safeTransfer(msg.sender, _amount);
     }
-
-   
 }
