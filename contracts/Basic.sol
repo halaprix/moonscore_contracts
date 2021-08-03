@@ -139,12 +139,14 @@ contract Basic is Ownable, ReentrancyGuard, Pausable {
         whenNotPaused
         returns (uint256)
     {
+        uint256 _beforeDeposit = IERC20(wantAddress).balanceOf(address(this));
         IERC20(wantAddress).safeTransferFrom(
             address(msg.sender),
             address(this),
             _wantAmt
         );
-
+        _wantAmt = _wantAmt - _beforeDeposit;
+        
         uint256 sharesAdded = _wantAmt;
         if (wantLockedTotal > 0) {
             sharesAdded = _wantAmt
@@ -235,7 +237,7 @@ contract Basic is Ownable, ReentrancyGuard, Pausable {
 
         earnedAmt = distributeFees(earnedAmt);
         if (buyBackRate > 0) {
-             earnedAmt = buyBack(earnedAmt);
+            earnedAmt = buyBack(earnedAmt);
         }
 
         if (isCAKEStaking || isSameAssetDeposit) {
@@ -303,8 +305,9 @@ contract Basic is Ownable, ReentrancyGuard, Pausable {
         if (_earnedAmt > 0) {
             // Performance fee
             if (controllerFee > 0) {
-                uint256 fee =
-                    _earnedAmt.mul(controllerFee).div(controllerFeeDenominator);
+                uint256 fee = _earnedAmt.mul(controllerFee).div(
+                    controllerFeeDenominator
+                );
                 IERC20(earnedAddress).safeTransfer(feeAddress, fee);
                 _earnedAmt = _earnedAmt.sub(fee);
             }
@@ -371,7 +374,10 @@ contract Basic is Ownable, ReentrancyGuard, Pausable {
     function setEntranceFeeFactor(uint256 _entranceFeeFactor) external {
         require(msg.sender == govAddress, "Not authorised");
         require(_entranceFeeFactor > entranceFeeFactorLL, "!safe - too low");
-        require(_entranceFeeFactor <= entranceFeeFactorDenominator, "!safe - too high");
+        require(
+            _entranceFeeFactor <= entranceFeeFactorDenominator,
+            "!safe - too high"
+        );
         entranceFeeFactor = _entranceFeeFactor;
     }
 
@@ -410,18 +416,18 @@ contract Basic is Ownable, ReentrancyGuard, Pausable {
         address _to,
         uint256 _deadline
     ) internal virtual {
-        uint256[] memory amounts =
-            IPancakeRouter02(_uniRouterAddress).getAmountsOut(_amountIn, _path);
+        uint256[] memory amounts = IPancakeRouter02(_uniRouterAddress)
+            .getAmountsOut(_amountIn, _path);
         uint256 amountOut = amounts[amounts.length.sub(1)];
 
         IPancakeRouter02(_uniRouterAddress)
             .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            _amountIn,
-            amountOut.mul(_slippageFactor).div(1000),
-            _path,
-            _to,
-            _deadline
-        );
+                _amountIn,
+                amountOut.mul(_slippageFactor).div(1000),
+                _path,
+                _to,
+                _deadline
+            );
     }
 
     function buyBack(uint256 _earnedAmt) internal virtual returns (uint256) {
@@ -429,8 +435,9 @@ contract Basic is Ownable, ReentrancyGuard, Pausable {
             return _earnedAmt;
         }
 
-        uint256 buyBackAmt =
-            _earnedAmt.mul(buyBackRate).div(buyBackRateDenominator);
+        uint256 buyBackAmt = _earnedAmt.mul(buyBackRate).div(
+            buyBackRateDenominator
+        );
 
         if (earnedAddress == PIXELAddress) {
             IERC20(earnedAddress).safeTransfer(buyBackAddress, buyBackAmt);

@@ -1,10 +1,15 @@
 {
-	"folders": [
-		{
-			"path": "."
-		}
-	],
-	"settings": {
-		"solidity.compileUsingRemoteVersion": "latest"
-	}
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "solidity.compileUsingRemoteVersion": "latest",
+    "editor.formatOnSave": true,
+    "solidity.linter": "solhint",
+    "solidity.solhintRules": {
+      "avoid-sha3": "warn"
+    }
+  }
 }
