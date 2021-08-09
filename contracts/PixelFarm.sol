@@ -11,6 +11,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
+import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 
 // import "./PIXELToken.sol";
 abstract contract PIXELToken is ERC20 {
@@ -53,8 +56,9 @@ interface IStrategy {
     ) external;
 }
 
-contract PixelFarm is Ownable, ReentrancyGuard {
+contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
     using SafeERC20 for IERC20;
+    using Address for address;
 
     // Info of each user.
     struct UserInfo {
@@ -91,12 +95,14 @@ contract PixelFarm is Ownable, ReentrancyGuard {
         uint256 totalBoostedShares; // Represents the shares of the users, with according boosts.
     }
     // setup reward token and nft addresses
-    address public PIXEL = 0x3a7c61eD7B0B74EA2ABE7B685F373604A9214D11;
+    address public PIXEL = 0x03b6ADed0B3C4690dE4a355D57A554285441452C;
     INftV1 public _nftV1 = INftV1(0xc7C813baa6479B7E7c335A8B494E3A4B6C6E7bEF);
     INftV1 public _nftV2 = INftV1(0xeB87711651614CA1d1CB373D10895cf50ecA165E);
 
     // Deposit Fee address - only for no-vault native farms and pools
     address public feeAddress = 0xFEB2df0A1db88c3d304A0a172a3C176370b9368d;
+
+    address public zapAddress = 0x000000000000000000000000000000000000dEaD;
 
     address public burnAddress = 0x000000000000000000000000000000000000dEaD;
     // TODO : make it right
@@ -230,13 +236,13 @@ contract PixelFarm is Ownable, ReentrancyGuard {
                 accPIXELPerShare +
                 ((PIXELReward * 1e12) / totalBoostedShares);
         }
-        uint256 pending = (user.boostedShares * pool.accPIXELPerShare) /
+        uint256 pending = (user.boostedShares * accPIXELPerShare) /
             1e12 -
             user.rewardDebt;
         if ((block.timestamp - user.lastActionTimeStamp) < penaltyBase) {
             return
                 pending -
-                ((currentPenalty(_pid, msg.sender) * pending) / TEN_THOUSAND);
+                ((currentPenalty(_pid, _user) * pending) / TEN_THOUSAND);
         } else {
             return pending;
         }
@@ -319,10 +325,15 @@ contract PixelFarm is Ownable, ReentrancyGuard {
     }
 
     // Want tokens moved from user -> PIXELFarm (PIXEL allocation) -> Strat (compounding)
-    function deposit(uint16 _pid, uint256 _wantAmt) external nonReentrant {
+    function deposit(
+        uint16 _pid,
+        uint256 _wantAmt,
+        address _to
+    ) external nonReentrant {
+        require(msg.sender == zapAddress || !msg.sender.isContract());
         updatePool(_pid);
         PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
+        UserInfo storage user = userInfo[_pid][_to];
 
         if (user.shares > 0) {
             uint256 pending = (user.boostedShares * pool.accPIXELPerShare) /
@@ -330,37 +341,33 @@ contract PixelFarm is Ownable, ReentrancyGuard {
                 user.rewardDebt;
             if ((block.timestamp - user.lastActionTimeStamp) < penaltyBase) {
                 uint256 pendingAfterPenalty = (pending -
-                    ((currentPenalty(_pid, msg.sender) * pending) /
-                        TEN_THOUSAND));
+                    ((currentPenalty(_pid, _to) * pending) / TEN_THOUSAND));
 
                 if (pending > 0) {
-                    safePIXELTransfer(msg.sender, pendingAfterPenalty);
+                    safePIXELTransfer(_to, pendingAfterPenalty);
                     safePIXELTransfer(
                         burnAddress,
                         pending - pendingAfterPenalty
                     );
                 }
             } else if (pending > 0) {
-                safePIXELTransfer(msg.sender, pending);
+                safePIXELTransfer(_to, pending);
             }
         }
         if (_wantAmt > 0) {
             uint256 _beforeDeposit = pool.want.balanceOf(address(this));
-            pool.want.safeTransferFrom(
-                address(msg.sender),
-                address(this),
-                _wantAmt
-            );
+            pool.want.safeTransferFrom(address(_to), address(this), _wantAmt);
             if (pool.depositFeeBP > 0) {
                 uint256 depositFee = (_wantAmt * pool.depositFeeBP) / 10000;
                 pool.want.safeTransfer(feeAddress, depositFee);
             }
-            _wantAmt = _wantAmt - _beforeDeposit;
+            uint256 _afterDeposit = pool.want.balanceOf(address(this));
+            _wantAmt = _afterDeposit - _beforeDeposit;
 
             pool.want.safeIncreaseAllowance(pool.strat, _wantAmt);
 
             uint256 sharesAdded = IStrategy(poolInfo[_pid].strat).deposit(
-                msg.sender,
+                _to,
                 _wantAmt
             );
             user.shares = user.shares + sharesAdded;
@@ -613,5 +620,18 @@ contract PixelFarm is Ownable, ReentrancyGuard {
     {
         require(_token != PIXEL, "!safe");
         IERC20(_token).safeTransfer(msg.sender, _amount);
+    }
+
+    function setZapAddress(address _address) external onlyOwner {
+        zapAddress = _address;
+    }
+
+    function onERC721Received(
+        address,
+        address,
+        uint256,
+        bytes memory
+    ) public virtual override returns (bytes4) {
+        return this.onERC721Received.selector;
     }
 }

@@ -11,9 +11,10 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 //import "./libraries/SafeERC20.sol";
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+
 //import "./helpers/Ownable.sol";
 
-contract staked is ERC20("staked", "STK"), Ownable {
+contract staked2 is ERC20("staked2", "STK2"), Ownable {
     function mint(address _to, uint256 _amount) public onlyOwner {
         _mint(_to, _amount);
     }

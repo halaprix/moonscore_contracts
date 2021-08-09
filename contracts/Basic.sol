@@ -145,8 +145,9 @@ contract Basic is Ownable, ReentrancyGuard, Pausable {
             address(this),
             _wantAmt
         );
-        _wantAmt = _wantAmt - _beforeDeposit;
-        
+        uint256 _afterDeposit = IERC20(wantAddress).balanceOf(address(this));
+        _wantAmt = _afterDeposit - _beforeDeposit;
+
         uint256 sharesAdded = _wantAmt;
         if (wantLockedTotal > 0) {
             sharesAdded = _wantAmt
