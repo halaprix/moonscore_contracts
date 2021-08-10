@@ -12,19 +12,19 @@ module.exports = function (deployer) {
   //testnet
   deployer.deploy(
     Basic,
-    "0xccd9b95dCe09fc70c09ad415A8323fbfFF90c0e7",
-    "0xB00b57cc4b922A2C009319c1B714CF2149Af1393",
-    false,
-    false,
-    false,
-    "0xccd9b95dCe09fc70c09ad415A8323fbfFF90c0e7",
-    0,
-    "0xe722D56a6B6716fC79Da130eAC8f18C3816aE0f7",
-    "0x094616f0bdfb0b526bd735bf66eca0ad254ca81f",
-    "0xe722D56a6B6716fC79Da130eAC8f18C3816aE0f7",
-    "0x837E49Fe59eDA1F7952B18384b4c89A441Ec0764",
-    "0xD99D1c33F9fC3444f8101754aBC46c52416550D1"
+    "0xa9725196e9dEeC71a35bCA5930C2A13CB5955D4E", //address _autoFarmAddress
+    "0xB00b57cc4b922A2C009319c1B714CF2149Af1393", //address _feeAddress
+    false, // bool _isCAKEStaking
+    false, // bool _isSameAssetDeposit,
+    false, // bool _isAutoComp,
+    "0xccd9b95dCe09fc70c09ad415A8323fbfFF90c0e7", // address _farmContractAddress,
+    0, // uint256 _pid,
+    "0xe722D56a6B6716fC79Da130eAC8f18C3816aE0f7", // address _wantAddress,
+    "0x094616f0bdfb0b526bd735bf66eca0ad254ca81f", //  address _token0Address,   /bnb
+    "0xe722D56a6B6716fC79Da130eAC8f18C3816aE0f7", // address _token1Address,
+    "0x837E49Fe59eDA1F7952B18384b4c89A441Ec0764", // address _earnedAddress,
+    "0xD99D1c33F9fC3444f8101754aBC46c52416550D1" // address _uniRouterAddres
   );
-  //deployer.deploy(PixelFarm);
-  //deployer.deploy(staked2);
+  // deployer.deploy(PixelFarm);
+  //deployer.deploy(PIXEL);
 };

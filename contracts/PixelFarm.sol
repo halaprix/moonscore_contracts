@@ -95,7 +95,7 @@ contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
         uint256 totalBoostedShares; // Represents the shares of the users, with according boosts.
     }
     // setup reward token and nft addresses
-    address public PIXEL = 0x03b6ADed0B3C4690dE4a355D57A554285441452C;
+    address public PIXEL = 0xc2d69aB0F32a6EAff8F76a93131678A3D27C8f96;
     INftV1 public _nftV1 = INftV1(0xc7C813baa6479B7E7c335A8B494E3A4B6C6E7bEF);
     INftV1 public _nftV2 = INftV1(0xeB87711651614CA1d1CB373D10895cf50ecA165E);
 
@@ -356,7 +356,11 @@ contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
         }
         if (_wantAmt > 0) {
             uint256 _beforeDeposit = pool.want.balanceOf(address(this));
-            pool.want.safeTransferFrom(address(_to), address(this), _wantAmt);
+            pool.want.safeTransferFrom(
+                address(msg.sender),
+                address(this),
+                _wantAmt
+            );
             if (pool.depositFeeBP > 0) {
                 uint256 depositFee = (_wantAmt * pool.depositFeeBP) / 10000;
                 pool.want.safeTransfer(feeAddress, depositFee);
@@ -375,15 +379,20 @@ contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
         _updateBoostedShares(_pid);
         user.rewardDebt = (user.boostedShares * pool.accPIXELPerShare) / 1e12;
         user.lastActionTimeStamp = block.timestamp;
-        emit Deposit(msg.sender, _pid, _wantAmt);
+        emit Deposit(_to, _pid, _wantAmt);
     }
 
     // Withdraw LP tokens from MasterChef.
-    function withdraw(uint16 _pid, uint256 _wantAmt) public nonReentrant {
+    function withdraw(
+        uint16 _pid,
+        uint256 _wantAmt,
+        address _to
+    ) external nonReentrant {
+        require(msg.sender == zapAddress || msg.sender == _to);
         updatePool(_pid);
 
         PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][msg.sender];
+        UserInfo storage user = userInfo[_pid][_to];
 
         uint256 wantLockedTotal = IStrategy(poolInfo[_pid].strat)
             .wantLockedTotal();
@@ -398,13 +407,13 @@ contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
             user.rewardDebt;
         if ((block.timestamp - user.lastActionTimeStamp) < penaltyBase) {
             uint256 pendingAfterPenalty = pending -
-                ((currentPenalty(_pid, msg.sender) * pending) / TEN_THOUSAND);
+                ((currentPenalty(_pid, _to) * pending) / TEN_THOUSAND);
             if (pending > 0) {
-                safePIXELTransfer(msg.sender, pendingAfterPenalty);
+                safePIXELTransfer(_to, pendingAfterPenalty);
                 safePIXELTransfer(burnAddress, pending - pendingAfterPenalty);
             }
         } else if (pending > 0) {
-            safePIXELTransfer(msg.sender, pending);
+            safePIXELTransfer(_to, pending);
         }
 
         // Withdraw want tokens
@@ -414,7 +423,7 @@ contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
         }
         if (_wantAmt > 0) {
             uint256 sharesRemoved = IStrategy(poolInfo[_pid].strat).withdraw(
-                msg.sender,
+                _to,
                 _wantAmt
             );
 
@@ -433,7 +442,7 @@ contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
         _updateBoostedShares(_pid);
         user.rewardDebt = (user.boostedShares * pool.accPIXELPerShare) / 1e12;
         user.lastActionTimeStamp = block.timestamp;
-        emit Withdraw(msg.sender, _pid, _wantAmt);
+        emit Withdraw(_to, _pid, _wantAmt);
     }
 
     /// @dev Deposit NFTv1 to masterchef to get reduced withdraw penalty.
