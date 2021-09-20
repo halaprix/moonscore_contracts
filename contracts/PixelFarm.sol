@@ -95,9 +95,9 @@ contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
         uint256 totalBoostedShares; // Represents the shares of the users, with according boosts.
     }
     // setup reward token and nft addresses
-    address public PIXEL = 0xc2d69aB0F32a6EAff8F76a93131678A3D27C8f96;
-    INftV1 public _nftV1 = INftV1(0xc7C813baa6479B7E7c335A8B494E3A4B6C6E7bEF);
-    INftV1 public _nftV2 = INftV1(0xeB87711651614CA1d1CB373D10895cf50ecA165E);
+    address public PIXEL = 0xFc9190EB1f601Ab8C67D86fA0843b8005926cFbb;
+    INftV1 public _nftV1 = INftV1(0xdB553FA278e962a75105b84267B7cC42FE12a3e2);
+    INftV1 public _nftV2 = INftV1(0x71c74e21EB22d0FF66A05Fb9086418bEA51cF2da);
 
     // Deposit Fee address - only for no-vault native farms and pools
     address public feeAddress = 0xFEB2df0A1db88c3d304A0a172a3C176370b9368d;
@@ -105,14 +105,16 @@ contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
     address public zapAddress = 0x000000000000000000000000000000000000dEaD;
 
     address public burnAddress = 0x000000000000000000000000000000000000dEaD;
-    // TODO : make it right
+
+    // 10%
     uint256 public ownerPIXELReward = 100;
-    // penaltyBase in seconds - after that the penalty is 0
-    uint24 public penaltyBase = 6e5;
+
+    // penaltyBase in seconds - after that the penalty is 0 - 172800 2 days
+    uint24 public penaltyBase = 172800;
 
     uint256 public PIXELMaxSupply = 10000e18;
-    uint256 public PIXELPerBlock = 1e15;
-    uint256 public startBlock = 8011841;
+    uint256 public PIXELPerBlock = 9e16;
+    uint256 public startBlock = 10844981;
 
     // const
     uint16 constant TEN_THOUSAND = 10000;
@@ -330,7 +332,8 @@ contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
         uint256 _wantAmt,
         address _to
     ) external nonReentrant {
-        require(msg.sender == zapAddress || !msg.sender.isContract());
+        require(msg.sender == zapAddress || msg.sender == _to);
+   
         updatePool(_pid);
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_to];
@@ -604,7 +607,9 @@ contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
 
         if (user.nftId2 > 0) {
             uint256 bonus = _nftV2.generateRARITYofTokenById(user.nftId2);
-            user.boostedShares = (user.boostedShares * (bonus)) / 10;
+            user.boostedShares =
+                user.boostedShares +
+                ((user.boostedShares * (bonus)) / 10);
         }
 
         pool.totalBoostedShares =
@@ -629,6 +634,11 @@ contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
     {
         require(_token != PIXEL, "!safe");
         IERC20(_token).safeTransfer(msg.sender, _amount);
+    }
+
+    function setPenaltyBase(uint24 _penaltyBase) external onlyOwner {
+        require(_penaltyBase < 172800, "must be lower than 172800");
+        penaltyBase = _penaltyBase;
     }
 
     function setZapAddress(address _address) external onlyOwner {
