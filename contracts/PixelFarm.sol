@@ -333,7 +333,7 @@ contract PixelFarm is Ownable, ReentrancyGuard, ERC165, IERC721Receiver {
         address _to
     ) external nonReentrant {
         require(msg.sender == zapAddress || msg.sender == _to);
-   
+
         updatePool(_pid);
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_to];
