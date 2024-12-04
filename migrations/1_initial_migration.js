@@ -42,6 +42,23 @@ module.exports = function (deployer) {
     "0x72feac4c0887c12db21ceb161533fd8467469e6b", // address _earnedAddress,
     "0xc0788a3ad43d79aa53b09c2eacc313a787d1d607" // address _uniRouterAddres
   );  
+
+    // kebs
+    // deployer.deploy(
+    //   Basic,
+    //   "0x021EcE112FD0E64d344583F8463177DFE996E8E5", //address _autoFarmAddress
+    //   "0xFEB2df0A1db88c3d304A0a172a3C176370b9368d", //address _feeAddress
+    //   false, // bool _isCAKEStaking
+    //   false, // bool _isSameAssetDeposit,
+    //   true, // bool _isAutoComp,
+    //   "0x76FCeffFcf5325c6156cA89639b17464ea833ECd", // address _farmContractAddress,
+    //   11, // uint256 _pid,
+    //   "0xD51bee2E0A3886289F6D229b6f30c0C2b34fC0Ec", // address _wantAddress, LP token
+    //   "0x7979F6C54ebA05E18Ded44C4F986F49a5De551c2", //  address _token0Address,   /bnb
+    //   "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56", // address _token1Address,
+    //   "0x7979F6C54ebA05E18Ded44C4F986F49a5De551c2", // address _earnedAddress,
+    //   "0x05fF2B0DB69458A0750badebc4f9e13aDd608C7F" // address _uniRouterAddres
+    // ); 
   //deployer.deploy(PixelFarm);
  // deployer.deploy(PixelFarm);
 };
